@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { isAdmin } from '../../../../../lib/adminSession';
-import { setUserBlocked } from '../../../../../lib/strangeinBackend';
+import { isAdmin } from '@/lib/adminSession';
+import { setUserBlocked } from '@/lib/strangeinBackend';
 
 export const dynamic = 'force-dynamic';
 
