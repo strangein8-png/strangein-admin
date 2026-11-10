@@ -5,6 +5,17 @@ import { getAge, normGender, fmtDate, downloadCsv, uid } from '../../lib/format'
 
 const PAGE_SIZE = 20;
 
+const actionBtn = (bg, disabled) => ({
+  padding: '5px 12px',
+  border: 'none',
+  borderRadius: 6,
+  color: '#fff',
+  background: bg,
+  fontSize: 13,
+  opacity: disabled ? 0.35 : 1,
+  cursor: disabled ? 'not-allowed' : 'pointer',
+});
+
 export default function UsersTable({ users, loading, busy, hasJoinDate, onOpen, onStatusChange }) {
   const [query, setQuery] = useState('');
   const [gender, setGender] = useState('all');
@@ -21,6 +32,7 @@ export default function UsersTable({ users, loading, busy, hasJoinDate, onOpen, 
       const inactive = u.isBlocked || u.isDeleted;
       if (status === 'active' && inactive) return false;
       if (status === 'inactive' && !inactive) return false;
+      if (status === 'blocked' && !(u.isBlocked && !u.isDeleted)) return false;
       if (status === 'deleted' && !u.isDeleted) return false;
       if (!q) return true;
       return [u.fullName, u.mobileNo, u.email, u.city, u.state]
@@ -35,7 +47,7 @@ export default function UsersTable({ users, loading, busy, hasJoinDate, onOpen, 
   useEffect(() => setPage(1), [query, gender, status, sort]);
 
   const rows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const colCount = hasJoinDate ? 10 : 9;
+  const colCount = hasJoinDate ? 11 : 10;
 
   function exportCsv() {
     downloadCsv('strangein-users', [
@@ -49,8 +61,22 @@ export default function UsersTable({ users, loading, busy, hasJoinDate, onOpen, 
       ['Country', (u) => u.country],
       ['Joined', (u) => u.createdDate],
       ['Reports', (u) => u.reportCount || 0],
-      ['Status', (u) => (u.isDeleted ? 'Inactive (Deleted)' : u.isBlocked ? 'Inactive' : 'Active')],
+      ['Status', (u) => (u.isDeleted ? 'Inactive (Deleted)' : u.isBlocked ? 'Blocked' : 'Active')],
     ], filtered);
+  }
+
+  function handleBlock(u) {
+    const name = u.fullName || u.mobileNo || 'this user';
+    if (window.confirm(`Block ${name}? They will not be able to log in or use the app.`)) {
+      onStatusChange(u, 'inactive');
+    }
+  }
+
+  function handleUnblock(u) {
+    const name = u.fullName || u.mobileNo || 'this user';
+    if (window.confirm(`Unblock ${name}? They will be able to log in again.`)) {
+      onStatusChange(u, 'active');
+    }
   }
 
   return (
@@ -68,7 +94,8 @@ export default function UsersTable({ users, loading, busy, hasJoinDate, onOpen, 
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="all">All status</option>
           <option value="active">Active</option>
-          <option value="inactive">Inactive (all)</option>
+          <option value="blocked">Blocked</option>
+          <option value="inactive">Inactive (blocked + deleted)</option>
           <option value="deleted">Deleted accounts</option>
         </select>
         <select value={sort} onChange={(e) => setSort(e.target.value)}>
@@ -87,47 +114,69 @@ export default function UsersTable({ users, loading, busy, hasJoinDate, onOpen, 
               {hasJoinDate && <th>Joined</th>}
               <th>Reports</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && <tr><td colSpan={colCount} className="center">Loading…</td></tr>}
             {!loading && rows.length === 0 && <tr><td colSpan={colCount} className="center">No users found</td></tr>}
-            {rows.map((u) => (
-              <tr key={uid(u)} onClick={() => onOpen(u)}>
-                <td>
-                  {u.images?.[0]
-                    ? <img className="avatar" src={u.images[0]} alt="" />
-                    : <div className="avatar ph">{(u.fullName || '?')[0]}</div>}
-                </td>
-                <td>{u.fullName || (u.isDeleted ? 'Deleted user' : '—')}</td>
-                <td>{u.mobileNo || '—'}</td>
-                <td>{u.email || '—'}</td>
-                <td>{u.isDeleted ? '—' : normGender(u.gender)}</td>
-                <td>{getAge(u.dob) ?? '—'}</td>
-                <td>{[u.city, u.state].filter(Boolean).join(', ') || '—'}</td>
-                {hasJoinDate && <td>{fmtDate(u.createdDate)}</td>}
-                <td>
-                  {u.reportCount
-                    ? <span className={`badge ${u.reportCount >= 5 ? 'bad' : 'warn'}`}>{u.reportCount}</span>
-                    : <span className="muted">0</span>}
-                </td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  {u.isDeleted ? (
-                    <span className="badge bad">Inactive · Deleted</span>
-                  ) : (
-                    <select
-                      className={`status-select ${u.isBlocked ? 'bad' : 'good'}`}
-                      value={u.isBlocked ? 'inactive' : 'active'}
-                      disabled={!!busy[uid(u)]}
-                      onChange={(e) => onStatusChange(u, e.target.value)}
-                    >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {rows.map((u) => {
+              const isBusy = !!busy[uid(u)];
+              return (
+                <tr key={uid(u)} onClick={() => onOpen(u)}>
+                  <td>
+                    {u.images?.[0]
+                      ? <img className="avatar" src={u.images[0]} alt="" />
+                      : <div className="avatar ph">{(u.fullName || '?')[0]}</div>}
+                  </td>
+                  <td>{u.fullName || (u.isDeleted ? 'Deleted user' : '—')}</td>
+                  <td>{u.mobileNo || '—'}</td>
+                  <td>{u.email || '—'}</td>
+                  <td>{u.isDeleted ? '—' : normGender(u.gender)}</td>
+                  <td>{getAge(u.dob) ?? '—'}</td>
+                  <td>{[u.city, u.state].filter(Boolean).join(', ') || '—'}</td>
+                  {hasJoinDate && <td>{fmtDate(u.createdDate)}</td>}
+                  <td>
+                    {u.reportCount
+                      ? <span className={`badge ${u.reportCount >= 5 ? 'bad' : 'warn'}`}>{u.reportCount}</span>
+                      : <span className="muted">0</span>}
+                  </td>
+                  <td>
+                    {u.isDeleted ? (
+                      <span className="badge bad">Inactive · Deleted</span>
+                    ) : u.isBlocked ? (
+                      <span className="badge bad">Blocked</span>
+                    ) : (
+                      <span className="badge good">Active</span>
+                    )}
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {u.isDeleted ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          style={actionBtn('#dc2626', isBusy || u.isBlocked)}
+                          disabled={isBusy || u.isBlocked}
+                          onClick={() => handleBlock(u)}
+                        >
+                          Block
+                        </button>
+                        <button
+                          type="button"
+                          style={actionBtn('#16a34a', isBusy || !u.isBlocked)}
+                          disabled={isBusy || !u.isBlocked}
+                          onClick={() => handleUnblock(u)}
+                        >
+                          Unblock
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -57,7 +57,7 @@ export default function Dashboard() {
     setBusy((b) => ({ ...b, [key]: true }));
     patchUser(key, status === 'inactive');
     try {
-      const res = await fetch('/api/admin/users/status', {
+      const res = await fetch('/api/admin/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mobileNo: user.mobileNo, status }),
